@@ -1,0 +1,24 @@
+name: Go Syntax Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  syntax-check:
+    name: Check Go syntax
+    runs-on: ubuntu-lates
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+    
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.2'
+
+      - name: Verify Go modules
+        run: go mod verify
+
+      - name: Check Go syntax (build without output)
+        run: go build -v ./...

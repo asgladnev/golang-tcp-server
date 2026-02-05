@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/asgladnev/golang-tcp-server/internal/config"
 	"github.com/asgladnev/golang-tcp-server/internal/server"
@@ -15,18 +14,20 @@ import (
 )
 
 func main() {
-	logger, _ := zap.NewProduction()
+	logger, err := zap.NewProduction()
+	//logger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
 	defer logger.Sync()
 
-	cfg := config.ServerConfig{
-		Host:        "127.0.0.1",
-		Port:        9000,
-		MaxBuffer:   65535,
-		ChunkSize:   1024,
-		ReadTimeout: 60 * time.Second,
+	cfgPath := "config.yaml"
+	cfg, err := config.LoadFromFile(cfgPath)
+	if err != nil {
+		logger.Fatal("Failed to load config", zap.Error(err))
 	}
 
-	srv := server.New(cfg, logger)
+	srv := server.New(*cfg, logger)
 
 	listener, err := net.Listen("tcp4", fmt.Sprintf("%s:%d", cfg.Host, cfg.Port))
 	if err != nil {

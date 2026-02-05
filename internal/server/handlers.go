@@ -31,9 +31,9 @@ func (srv *TCPServer) handleClient(ctx context.Context, client *TCPClient) {
 }
 
 func (srv *TCPServer) readClientData(ctx context.Context, client *TCPClient, clientIP string) {
-	buffer := make([]byte, srv.cfg.ChunkSize) // Буфер для чтения данных чанками фиксированного размера
-	var totalBuffer uint64 = 0                // Счётчик общего объёма принятых данных (в байтах)
-
+	chunk := make([]byte, srv.cfg.ChunkSize) // Буфер (чанк) для чтения данных чанками фиксированного размера
+	var totalBytesReceived uint64 = 0        // Счётчик общего объёма принятых данных (в байтах)
+	var recvBuffer []byte                    // буфер для накопления
 	// Цикл до EOF (закрытие соединения) или исчерпания буфера
 	for {
 		// Проверяем контекст перед каждое операцией
@@ -49,16 +49,18 @@ func (srv *TCPServer) readClientData(ctx context.Context, client *TCPClient, cli
 			return
 		}
 		// Читаем очередной чанк данных из TCP-соединения
-		n, err := client.conn.Read(buffer)
+		n, err := client.conn.Read(chunk)
 		// Если прочитано больше нуля байт — обрабатываем данные
 		if n > 0 {
 			// Если буфер превышен -> рвем соединение
-			if !srv.checkMaxBuffer(clientIP, totalBuffer, n) {
+			if !srv.checkMaxBuffer(clientIP, totalBytesReceived, n) {
 				return
 			}
 
-			totalBuffer += uint64(n) // Записываем чанк
-			//fmt.Print(string(buffer[:n])) // Выводим сообщение
+			recvBuffer = append(recvBuffer, chunk[:n]...)
+			totalBytesReceived += uint64(n) // Записываем чанк
+			srv.logger.Debug("Raw data", zap.ByteString("data", chunk[:n]))
+			srv.logger.Info("String data", zap.String("data", string(recvBuffer)))
 		}
 
 		// Обработка ошибок
@@ -67,7 +69,7 @@ func (srv *TCPServer) readClientData(ctx context.Context, client *TCPClient, cli
 			if err == io.EOF {
 				srv.logger.Debug("Received all data from client",
 					zap.String("client_ip", clientIP),
-					zap.Uint64("total_bytes", totalBuffer))
+					zap.Uint64("total_bytes", totalBytesReceived))
 				return
 			}
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
